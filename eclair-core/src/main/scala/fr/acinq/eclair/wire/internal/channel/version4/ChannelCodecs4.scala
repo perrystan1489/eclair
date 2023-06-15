@@ -246,7 +246,8 @@ private[channel] object ChannelCodecs4 {
         ("serialId" | uint64) ::
           ("scriptPubKey" | lengthDelimited(bytes)) ::
           ("localAmount" | millisatoshi) ::
-          ("remoteAmount" | millisatoshi)).as[InteractiveTxBuilder.Output.Shared])
+          ("remoteAmount" | millisatoshi) ::
+          ("htlcsAmount" | millisatoshi)).as[InteractiveTxBuilder.Output.Shared])
 
     private val localOnlyInteractiveTxInputCodec: Codec[InteractiveTxBuilder.Input.Local] = (
       ("serialId" | uint64) ::

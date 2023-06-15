@@ -157,7 +157,8 @@ private class InteractiveTxFunder(replyTo: ActorRef[InteractiveTxFunder.Response
       // contribute to the RBF attempt.
       if (fundingParams.isInitiator) {
         val sharedInput = fundingParams.sharedInput_opt.toSeq.map(sharedInput => Input.Shared(UInt64(0), sharedInput.info.outPoint, 0xfffffffdL, purpose.previousLocalBalance, purpose.previousRemoteBalance))
-        val sharedOutput = Output.Shared(UInt64(0), fundingPubkeyScript, purpose.previousLocalBalance + fundingParams.localContribution, purpose.previousRemoteBalance + fundingParams.remoteContribution)
+        val htlcsAmount = fundingParams.sharedInput_opt.map(_.info.txOut.amount).getOrElse(0 sat) - purpose.previousLocalBalance - purpose.previousRemoteBalance
+        val sharedOutput = Output.Shared(UInt64(0), fundingPubkeyScript, purpose.previousLocalBalance + fundingParams.localContribution, purpose.previousRemoteBalance + fundingParams.remoteContribution, htlcsAmount)
         val nonChangeOutputs = fundingParams.localOutputs.map(txOut => Output.Local.NonChange(UInt64(0), txOut.amount, txOut.publicKeyScript))
         val fundingContributions = sortFundingContributions(fundingParams, sharedInput ++ previousWalletInputs, sharedOutput +: nonChangeOutputs)
         replyTo ! fundingContributions
@@ -232,7 +233,8 @@ private class InteractiveTxFunder(replyTo: ActorRef[InteractiveTxFunder.Response
           val fundingContributions = if (fundingParams.isInitiator) {
             // The initiator is responsible for adding the shared output and the shared input.
             val inputs = inputDetails.usableInputs
-            val fundingOutput = Output.Shared(UInt64(0), fundingPubkeyScript, purpose.previousLocalBalance + fundingParams.localContribution, purpose.previousRemoteBalance + fundingParams.remoteContribution)
+            val htlcsAmount = fundingParams.sharedInput_opt.map(_.info.txOut.amount).getOrElse(0 sat) - purpose.previousLocalBalance - purpose.previousRemoteBalance
+            val fundingOutput = Output.Shared(UInt64(0), fundingPubkeyScript, purpose.previousLocalBalance + fundingParams.localContribution, purpose.previousRemoteBalance + fundingParams.remoteContribution, htlcsAmount)
             val outputs = Seq(fundingOutput) ++ nonChangeOutputs ++ changeOutput_opt.toSeq
             sortFundingContributions(fundingParams, inputs, outputs)
           } else {

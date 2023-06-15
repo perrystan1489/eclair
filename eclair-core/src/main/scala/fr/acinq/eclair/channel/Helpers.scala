@@ -367,19 +367,19 @@ object Helpers {
                            fundingTxHash: ByteVector32, fundingTxOutputIndex: Int,
                            remoteFundingPubKey: PublicKey,
                            remoteFirstPerCommitmentPoint: PublicKey): Either[ChannelException, (CommitmentSpec, CommitTx, CommitmentSpec, CommitTx)] =
-      makeCommitTxsWithoutHtlcs(keyManager, params,
+      makeArbitraryCommitTxs(keyManager, params,
         fundingAmount = localFundingAmount + remoteFundingAmount,
         toLocal = localFundingAmount.toMilliSatoshi - localPushAmount + remotePushAmount,
         toRemote = remoteFundingAmount.toMilliSatoshi + localPushAmount - remotePushAmount,
         commitTxFeerate,
         fundingTxIndex = 0,
-        fundingTxHash, fundingTxOutputIndex, remoteFundingPubKey = remoteFundingPubKey, remotePerCommitmentPoint = remoteFirstPerCommitmentPoint, commitmentIndex = 0)
+        fundingTxHash, fundingTxOutputIndex, remoteFundingPubKey = remoteFundingPubKey, remotePerCommitmentPoint = remoteFirstPerCommitmentPoint, commitmentIndex = 0, Set.empty[DirectedHtlc])
 
     /**
-     * This creates commitment transactions for both sides at an arbitrary `commitmentIndex`. There are no htlcs, only
-     * local/remote balances are provided.
+     * This creates commitment transactions for both sides at an arbitrary `commitmentIndex` and with (optional) `htlc`
+     * outputs.
      */
-    def makeCommitTxsWithoutHtlcs(keyManager: ChannelKeyManager,
+    def makeArbitraryCommitTxs(keyManager: ChannelKeyManager,
                                   params: ChannelParams,
                                   fundingAmount: Satoshi,
                                   toLocal: MilliSatoshi, toRemote: MilliSatoshi,
@@ -388,14 +388,15 @@ object Helpers {
                                   fundingTxHash: ByteVector32, fundingTxOutputIndex: Int,
                                   remoteFundingPubKey: PublicKey,
                                   remotePerCommitmentPoint: PublicKey,
-                                  commitmentIndex: Long): Either[ChannelException, (CommitmentSpec, CommitTx, CommitmentSpec, CommitTx)] = {
+                                  commitmentIndex: Long,
+                                  localHtlcs: Set[DirectedHtlc]): Either[ChannelException, (CommitmentSpec, CommitTx, CommitmentSpec, CommitTx)] = {
       import params._
-      val localSpec = CommitmentSpec(Set.empty[DirectedHtlc], commitTxFeerate, toLocal = toLocal, toRemote = toRemote)
-      val remoteSpec = CommitmentSpec(Set.empty[DirectedHtlc], commitTxFeerate, toLocal = toRemote, toRemote = toLocal)
+      val localSpec = CommitmentSpec(localHtlcs, commitTxFeerate, toLocal = toLocal, toRemote = toRemote)
+      val remoteSpec = CommitmentSpec(localHtlcs.map(_.opposite), commitTxFeerate, toLocal = toRemote, toRemote = toLocal)
 
       if (!localParams.isInitiator) {
         // They initiated the channel open, therefore they pay the fee: we need to make sure they can afford it!
-        // Note that the reserve may not be always be met: we could be using dual funding with a large funding amount on
+        // Note that the reserve may not always be met: we could be using dual funding with a large funding amount on
         // our side and a small funding amount on their side. But we shouldn't care as long as they can pay the fees for
         // the commitment transaction.
         val fees = commitTxTotalCost(remoteParams.dustLimit, remoteSpec, channelFeatures.commitmentFormat)
