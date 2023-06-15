@@ -383,7 +383,7 @@ class Channel(val nodeParams: NodeParams, val wallet: OnChainChannelFunder with 
         case _ => handleCommandError(error, c)
       }
 
-    case Event(msg: ForbiddenMessageDuringSplice, d: DATA_NORMAL) if d.commitments.params.remoteParams.initFeatures.hasFeature(QuiescePrototype) && d.spliceStatus != SpliceStatus.NoSplice && !d.spliceStatus.isInstanceOf[SpliceStatus.InitiatorQuiescent] =>
+    case Event(msg: ForbiddenMessageDuringSplice, d: DATA_NORMAL) if d.commitments.params.useQuiescence && d.spliceStatus != SpliceStatus.NoSplice && !d.spliceStatus.isInstanceOf[SpliceStatus.InitiatorQuiescent] =>
       val error = ForbiddenDuringSplice(d.channelId, msg.getClass.getSimpleName)
       msg match {
         case fulfill: UpdateFulfillHtlc =>
@@ -809,7 +809,7 @@ class Channel(val nodeParams: NodeParams, val wallet: OnChainChannelFunder with 
 
     case Event(cmd: CMD_SPLICE, d: DATA_NORMAL) =>
       if (d.commitments.params.remoteParams.initFeatures.hasFeature(SplicePrototype)) {
-        if (d.commitments.params.remoteParams.initFeatures.hasFeature(QuiescePrototype) && d.spliceStatus == SpliceStatus.NoSplice) {
+        if (d.commitments.params.useQuiescence && d.spliceStatus == SpliceStatus.NoSplice) {
           startSingleTimer(QuiescenceTimeout.toString, QuiescenceTimeout(peer), nodeParams.channelConf.revocationTimeout)
           if (d.commitments.changes.localChanges.all.isEmpty) {
             stay() using d.copy(spliceStatus = SpliceStatus.InitiatorQuiescent(cmd)) sending Stfu(d.channelId, 1)
@@ -826,7 +826,7 @@ class Channel(val nodeParams: NodeParams, val wallet: OnChainChannelFunder with 
       }
 
     case Event(msg: Stfu, d: DATA_NORMAL) =>
-      if (d.commitments.params.remoteParams.initFeatures.hasFeature(QuiescePrototype)) {
+      if (d.commitments.params.useQuiescence) {
         d.spliceStatus match {
           case SpliceStatus.NoSplice =>
             startSingleTimer(QuiescenceTimeout.toString, QuiescenceTimeout(peer), nodeParams.channelConf.quiescenceTimeout)
@@ -856,7 +856,7 @@ class Channel(val nodeParams: NodeParams, val wallet: OnChainChannelFunder with 
             stay()
         }
       } else {
-        log.warning("ignoring stfu because peer doesn't support quiescence")
+        log.warning("ignoring stfu because both peers do not advertise quiescence")
         stay()
       }
 
@@ -2644,7 +2644,7 @@ class Channel(val nodeParams: NodeParams, val wallet: OnChainChannelFunder with 
   }
 
   private def replayQuiescenceSettlements(d: DATA_NORMAL): Unit =
-    if (d.commitments.params.remoteParams.initFeatures.hasFeature(QuiescePrototype)) {
+    if (d.commitments.params.useQuiescence) {
       PendingCommandsDb.getSettlementCommands(nodeParams.db.pendingCommands, d.channelId).foreach(self ! _)
     }
 
